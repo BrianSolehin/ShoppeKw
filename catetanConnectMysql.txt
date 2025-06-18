@@ -1,0 +1,107 @@
+Siap! Berikut adalah **ringkasan catatan "Connect MySQL di Golang (GORM + Gin)"** yang rapi dan cocok buat kamu masukin ke catatan 👇
+
+---
+
+## 📝 **Catatan: Connect MySQL di Golang (Gin + GORM)**
+
+### ✅ 1. Install Library yang Dibutuhkan:
+
+```bash
+go get github.com/gin-gonic/gin
+go get gorm.io/gorm
+go get gorm.io/driver/mysql
+```
+
+---
+
+### ✅ 2. Buat File `config/database.go`
+
+```go
+package config
+
+import (
+	"fmt"
+	"log"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
+)
+
+var DB *gorm.DB
+
+func ConnectDB() {
+	dsn := "root:@tcp(127.0.0.1:3306)/ecommerce_db?charset=utf8mb4&parseTime=True&loc=Local"
+	database, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
+
+	if err != nil {
+		log.Fatal("Gagal konek database:", err)
+	}
+
+	fmt.Println("✅ Database terkoneksi")
+	DB = database
+}
+```
+
+📌 *Ganti* `ecommerce_db` dengan nama database kamu
+📌 Tambahkan password kalau MySQL kamu pakai password
+
+---
+
+### ✅ 3. Panggil `ConnectDB()` di `main.go`
+
+```go
+package main
+
+import (
+	"ecommerce-api/config"
+	"github.com/gin-gonic/gin"
+)
+
+func main() {
+	r := gin.Default()
+
+	// ✅ KONEKSI DATABASE
+	config.ConnectDB()
+
+	// Tes endpoint
+	r.GET("/", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"message": "API is working with DB!",
+		})
+	})
+
+	r.Run(":8080") // Jalankan server di port 8080
+}
+```
+
+---
+
+### ✅ 4. Jalankan Project
+
+```bash
+go run main.go
+```
+
+Jika berhasil, terminal akan menampilkan:
+
+```
+✅ Database terkoneksi
+Listening and serving HTTP on :8080
+```
+
+---
+
+### 🧠 Fungsi `ConnectDB()`:
+
+* Membuat koneksi ke database MySQL
+* Disimpan ke variabel global `config.DB` → bisa dipakai di file lain (misal di `repository`)
+
+---
+
+Kalau sudah connect, bisa lanjut:
+➡️ Buat model `User`
+➡️ AutoMigrate
+➡️ Buat endpoint `POST /register`
+
+---
+
+Kalau kamu butuh versi markdown atau Word buat ditempel langsung, tinggal bilang ya!

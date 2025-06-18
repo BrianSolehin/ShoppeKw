@@ -1,0 +1,174 @@
+Siap! Kamu keren karena **nanya dasar banget biar paham penuh dulu**, itu langkah penting sebelum nulis kode. Aku akan jelaskan semua **dengan bahasa simpel**, seperti ngajarin dari nol.
+
+---
+
+## ✅ 1. Penjelasan Perintah Awal
+
+### 🔹 `go mod init ecommerce-api`
+
+Ini artinya kamu bikin **proyek Golang baru** dengan nama `ecommerce-api`.
+
+🧠 Fungsi:
+
+* Membuat file `go.mod` → ini seperti **KTP proyekmu**.
+* Semua library pihak ketiga yang kamu pakai nanti akan dicatat di `go.mod`.
+
+---
+
+### 🔹 `go get github.com/gin-gonic/gin`
+
+Ini **meng-install Gin**, yaitu **web framework** Golang (mirip seperti Express.js di Node.js, atau Laravel di PHP).
+
+🧠 Fungsinya:
+
+* Biar kamu bisa buat API (routing GET, POST, dsb)
+* Menjalankan server (kayak `http://localhost:8080`)
+
+---
+
+### 🔹 `go get gorm.io/gorm`
+
+Meng-install **GORM**, yaitu **ORM (Object Relational Mapper)**
+
+🧠 Fungsinya:
+
+* Supaya kamu bisa **ngoding database tanpa nulis SQL mentah**.
+* Contoh: kamu bisa `db.Create(user)` daripada nulis `INSERT INTO...`.
+
+---
+
+### 🔹 `go get gorm.io/driver/mysql`
+
+Meng-install **driver MySQL buat GORM**.
+
+🧠 Fungsinya:
+
+* Supaya GORM bisa connect ke database MySQL kamu.
+* Tanpa ini, GORM gak tahu cara bicara sama MySQL.
+
+---
+
+### 🔹 `go get github.com/golang-jwt/jwt/v5`
+
+Install **JWT (JSON Web Token)** library.
+
+🧠 Fungsinya:
+
+* Untuk login dan autentikasi.
+* Setelah user login → dapat token → token itu dipakai untuk akses endpoint lain (yang butuh login).
+
+---
+
+## ✅ 2. Penjelasan Struktur Folder Kosong
+
+Struktur ini bikin kode kamu **rapi**, **terpisah sesuai fungsinya**, dan gampang diatur.
+
+```
+/ecommerce-api
+│
+├── main.go
+├── route.go
+│
+├── /controller
+├── /service
+├── /repository
+├── /entity
+├── /middleware
+├── /config
+```
+
+### 🟦 `main.go`
+
+* Titik masuk utama aplikasi
+* Isinya: run server, inisialisasi route
+
+### 🟨 `route.go`
+
+* Tempat semua **rute API** didefinisikan (GET /products, POST /orders, dsb)
+
+---
+
+### 📁 `controller/`
+
+* Ini bagian **yang terima request dari user**
+* Misalnya: user panggil `/register` → controller yang nerima, lalu terusin ke service
+
+---
+
+### 📁 `service/`
+
+* Tempat **logika bisnis** (aturan, validasi, dll)
+* Contoh: “jika stok habis, jangan proses order”
+
+---
+
+### 📁 `repository/`
+
+* Tempat berisi semua **kode akses database**
+* Misalnya: `db.Create(user)`, `db.Find(&products)`
+
+---
+
+### 📁 `entity/`
+
+* Tempat simpan **struct model** yang terhubung ke database via GORM
+* Contoh:
+
+```go
+type User struct {
+  ID uint
+  Email string
+  Password string
+}
+```
+
+---
+
+### 📁 `middleware/`
+
+* Tempat simpan **middleware JWT** dan **role check**
+* Contoh:
+
+  * Validasi token login
+  * Cek apakah user punya role "admin"
+
+---
+
+### 📁 `config/`
+
+* Tempat **koneksi database**
+* Contoh:
+
+```go
+dsn := "root:password@tcp(127.0.0.1:3306)/dbname"
+gorm.Open(mysql.Open(dsn))
+```
+
+---
+
+## ✅ 3. **Alur Kode Singkatnya:**
+
+```text
+User → API URL → Gin Route → Controller → Service → Repository → Database
+
+                  ↓
+               entity (model struct untuk GORM)
+```
+
+---
+
+### 🔁 Contoh Alur Saat User Login:
+
+1. User POST ke `/login`
+2. `route.go` arahkan ke `LoginController`
+3. `LoginController` panggil `LoginService`
+4. `LoginService` cek user lewat `UserRepository`
+5. `UserRepository` cari user di DB
+6. Kalau cocok → `LoginService` buat JWT token
+7. Controller kirim token ke user sebagai respons
+
+---
+
+Kalau kamu sudah paham semua ini, kita bisa lanjut pelan-pelan ke step 5: **setup koneksi database MySQL** + model user.
+
+Mau lanjut ke situ sekarang?

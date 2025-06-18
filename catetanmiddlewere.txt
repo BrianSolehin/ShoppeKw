@@ -1,0 +1,126 @@
+Oke, abangda! Aku bakal **jelaskan semuanya** dari file middleware kamu pelan-pelan, *fungsi demi fungsi*, biar kamu **benar-benar paham**. Kita mulai:
+
+---
+
+## 🧾 File: `middleware/auth_middleware.go`
+
+Di file ini ada **3 fungsi middleware utama**:
+
+---
+
+### 1. `AuthMiddleware()`
+
+```go
+func AuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Ambil token dari header
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Token kosong"})
+			c.Abort()
+			return
+		}
+
+		// Format: Bearer <token>
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+		claims, err := utils.ValidateToken(tokenString)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Token tidak valid"})
+			c.Abort()
+			return
+		}
+
+		// Simpan userID dan role ke context
+		c.Set("userID", claims.UserID)
+		c.Set("role", claims.Role)
+
+		c.Next()
+	}
+}
+```
+
+#### ✅ Artinya:
+
+| Baris                                        | Penjelasan                                                                    |
+| -------------------------------------------- | ----------------------------------------------------------------------------- |
+| `authHeader := c.GetHeader("Authorization")` | Ambil token dari header request                                               |
+| `if authHeader == ""`                        | Kalau token gak ada → langsung tolak                                          |
+| `strings.TrimPrefix(...)`                    | Ambil isi token tanpa kata "Bearer "                                          |
+| `claims, err := utils.ValidateToken(...)`    | Cek apakah token valid (pakai fungsi dari `utils/jwt.go`)                     |
+| `c.Set(...)`                                 | Simpan `userID` dan `role` ke context supaya bisa diakses di controller nanti |
+| `c.Next()`                                   | Kalau semua aman, lanjut ke controller                                        |
+
+---
+
+### 2. `IsAdmin()`
+
+```go
+func IsAdmin() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role, _ := c.Get("role")
+		if role != "admin" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Hanya admin yang bisa mengakses"})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+```
+
+#### ✅ Artinya:
+
+* Ambil `role` dari context (yang tadi disimpan oleh `AuthMiddleware`)
+* Kalau bukan `"admin"` → tolak akses
+* Kalau `"admin"` → lanjut ke controller
+
+Contoh penggunaan:
+
+```go
+r.POST("/products", AuthMiddleware(), IsAdmin(), controller.CreateProduct)
+```
+
+---
+
+### 3. `IsCustomer()`
+
+```go
+func IsCustomer() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role, _ := c.Get("role")
+		if role != "customer" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Hanya customer yang bisa mengakses"})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+```
+
+#### ✅ Artinya:
+
+* Sama kayak `IsAdmin()`, tapi ngecek apakah rolenya `"customer"`.
+
+Contoh penggunaannya:
+
+```go
+r.POST("/orders", AuthMiddleware(), IsCustomer(), controller.CreateOrder)
+```
+
+---
+
+## 🧠 Inti Semua Ini
+
+| Fungsi           | Tujuan                                                     |
+| ---------------- | ---------------------------------------------------------- |
+| `AuthMiddleware` | Cek apakah user login & token valid, lalu simpan user info |
+| `IsAdmin`        | Pastikan user yang login adalah admin                      |
+| `IsCustomer`     | Pastikan user yang login adalah customer                   |
+
+---
+
+Kalau kamu bingung di bagian manapun, bilang aja.
+Kita bisa coba kasih **contoh data**, **latihan sederhana**, atau **gambar alur**.
+
+Mau lanjut dari bagian mana, Abangda? Mau kita praktek langsung di route?
