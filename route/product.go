@@ -15,8 +15,8 @@ func ProductRoute(r *gin.Engine) {
 	auth := r.Group("/products")
 	auth.Use(middleware.AuthMiddleware()) // cek token
 	{
-		auth.POST("", middleware.IsAdmin(), controller.CreateProduct)
-		auth.PUT("/:id", middleware.IsAdmin(), controller.UpdateProduct)
-		auth.DELETE("/:id", middleware.IsAdmin(), controller.DeleteProduct)
+		auth.POST("", middleware.RequireRole("admin"), controller.CreateProduct)
+		auth.PUT("/:id", middleware.RequireRole("admin"), controller.UpdateProduct)
+		auth.DELETE("/:id", middleware.RequireRole("admin"), controller.DeleteProduct)
 	}
 }

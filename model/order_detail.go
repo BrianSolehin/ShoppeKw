@@ -8,3 +8,4 @@ type OrderDetail struct {
 	Quantity  int
 	Price     float64
 }
+	

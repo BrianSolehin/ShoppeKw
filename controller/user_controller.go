@@ -23,7 +23,7 @@ func Register(c *gin.Context) {
 		Name:     req.Name,
 		Email:    req.Email,
 		Password: string(hashedPassword),
-		Role:     "customer",
+		Role:     req.Role,
 	}
 
 	if err := config.DB.Create(&newUser).Error; err != nil {

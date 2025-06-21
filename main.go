@@ -1,26 +1,19 @@
 package main
 
 import (
-	"github.com/gin-gonic/gin"
-	"ecommerce-api/config"       // koneksi DB
-	"ecommerce-api/model"  
-	// "ecommerce-api/seed"  
-	"ecommerce-api/route" // ⬅️ tambahkan baris ini
+	"ecommerce-api/config"
+	"ecommerce-api/model"
+	"ecommerce-api/route"
 )
 
 func main() {
-	r := gin.Default()
-
 	// ✅ KONEKSI DATABASE
 	config.ConnectDB()
-	route.TransactionRoute(r)
-	route.OrderRoute(r)
-	route.UserRoute(r)
-	route.ProductRoute(r)
 
-	// ✅ MIGRATE SEMUA TABEL
+	// ✅ MIGRASI DATABASE
 	config.DB.AutoMigrate(
 		&model.User{},
+		&model.Store{},
 		&model.Category{},
 		&model.Product{},
 		&model.Order{},
@@ -29,15 +22,10 @@ func main() {
 		&model.Transaction{},
 	)
 
-	// // seed.InsertDummyData()
+	// ✅ INISIALISASI ROUTER LENGKAP DENGAN MIDDLEWARE & PREFIX
+	r := route.SetupRouter()
 
-	// Endpoint tes
-	r.GET("/", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"message": "API is working with DB!",
-		})
-	})
+	// ✅ JALANKAN SERVER
+	r.Run("0.0.0.0:8080")
 
-	// Jalankan server di localhost:8080
-	r.Run(":8080")
 }

@@ -2,14 +2,10 @@
 package controller
 
 import (
-	"ecommerce-api/config"
 	"ecommerce-api/dto/order"
-	"ecommerce-api/model"
 	"net/http"
-	"strconv"
-	"time"
-
 	"github.com/gin-gonic/gin"
+	"ecommerce-api/service"
 )
 
 func CreateOrder(c *gin.Context) {
@@ -19,89 +15,80 @@ func CreateOrder(c *gin.Context) {
 		return
 	}
 
-	// Mulai transaksi
-	tx := config.DB.Begin()
-
-	total := 0.0
-	order := model.Order{
-		UserID:      req.UserID,
-		Status:      "completed",
-		OrderDate:   time.Now(),
-		TotalAmount: 0,
-	}
-
-	// Simpan order dulu
-	if err := tx.Create(&order).Error; err != nil {
-		tx.Rollback()
+	orderID, err := service.CreateOrder(req)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Loop items & simpan order_detail
-	for _, item := range req.Items {
-		var product model.Product
-		if err := tx.First(&product, item.ProductID).Error; err != nil {
-			tx.Rollback()
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Produk tidak ditemukan"})
-			return
-		}
-
-		orderDetail := model.OrderDetail{
-			OrderID:   order.ID,
-			ProductID: item.ProductID,
-			Quantity:  item.Quantity,
-			Price:     product.Price,
-		}
-
-		if err := tx.Create(&orderDetail).Error; err != nil {
-			tx.Rollback()
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-
-		total += product.Price * float64(item.Quantity)
-	}
-
-	// Update total harga
-	order.TotalAmount = total
-	if err := tx.Save(&order).Error; err != nil {
-		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	// Commit jika semua aman
-	tx.Commit()
-	c.JSON(http.StatusCreated, gin.H{"message": "Order berhasil dibuat", "order_id": order.ID})
+	c.JSON(http.StatusCreated, gin.H{"message": "Order berhasil dibuat", "order_id": orderID})
 }
 
 func GetAllOrders(c *gin.Context) {
-	var orders []model.Order
-	config.DB.Preload("User").Find(&orders)
+	orders, err := service.GetAllOrders()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 	c.JSON(http.StatusOK, orders)
 }
 
 func GetOrderByID(c *gin.Context) {
-	id, _ := strconv.Atoi(c.Param("id"))
-	var order model.Order
-	if err := config.DB.Preload("User").First(&order, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Order tidak ditemukan"})
+	id := c.Param("id")
+
+	userIDInterface, _ := c.Get("userID")
+	roleInterface, _ := c.Get("role")
+
+	userID := userIDInterface.(uint)
+	role := roleInterface.(string)
+
+	order, detail, err := service.GetOrderByID(id, userID, role)
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
 		return
 	}
-	var details []model.OrderDetail
-	config.DB.Where("order_id = ?", order.ID).Preload("Product").Find(&details)
 
-	c.JSON(http.StatusOK, gin.H{
-		"order":  order,
-		"detail": details,
-	})
+	c.JSON(http.StatusOK, gin.H{"order": order, "detail": detail})
 }
 
+
 func DeleteOrder(c *gin.Context) {
-	id, _ := strconv.Atoi(c.Param("id"))
-	if err := config.DB.Delete(&model.Order{}, id).Error; err != nil {
+	id := c.Param("id")
+
+	userIDInterface, _ := c.Get("userID")
+	roleInterface, _ := c.Get("role")
+
+	userID := userIDInterface.(uint)
+	role := roleInterface.(string)
+
+	err := service.DeleteOrder(id, userID, role)
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Order berhasil dihapus"})
+}
+
+
+func GetMyOrders(c *gin.Context) {
+	userIDInterface, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User ID tidak ditemukan dalam token"})
+		return
+	}
+
+	userID, ok := userIDInterface.(uint)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "User ID tidak valid"})
+		return
+	}
+
+	orders, err := service.GetMyOrders(userID)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "Order berhasil dihapus"})
+
+	c.JSON(http.StatusOK, orders)
 }
