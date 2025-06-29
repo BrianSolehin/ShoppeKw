@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"net/http"
-
 	"github.com/gin-gonic/gin"
 )
 
@@ -16,9 +15,17 @@ func RequireRole(allowedRoles ...string) gin.HandlerFunc {
 			return
 		}
 
+		// Konversi role ke string
+		roleStr, ok := role.(string)
+		if !ok {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Format role tidak valid"})
+			c.Abort()
+			return
+		}
+
 		// Cek apakah role user termasuk dalam allowedRoles
 		for _, allowed := range allowedRoles {
-			if role == allowed {
+			if roleStr == allowed {
 				c.Next()
 				return
 			}

@@ -2,133 +2,133 @@ package controller
 
 import (
 	"ecommerce-api/config"
-	"ecommerce-api/dto/user"
 	"ecommerce-api/model"
-	"net/http"
+	"ecommerce-api/repository"
+	"ecommerce-api/service"
+	userdto "ecommerce-api/dto/user"
 	"strconv"
-	"ecommerce-api/utils"
+	"net/http"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 )
 
+// Register user baru
 func Register(c *gin.Context) {
-	var req user.RegisterRequest
+	var req userdto.RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-	newUser := model.User{
-		Name:     req.Name,
-		Email:    req.Email,
-		Password: string(hashedPassword),
-		Role:     req.Role,
-	}
-
-	if err := config.DB.Create(&newUser).Error; err != nil {
+	userService := service.NewUserService(repository.NewUserRepository(config.DB))
+	resp, err := userService.Register(req)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	newUser.Password = ""
-	c.JSON(http.StatusCreated, gin.H{"message": "Registrasi berhasil", "user": newUser})
+	c.JSON(http.StatusCreated, gin.H{"message": "Registrasi berhasil", "user": resp})
 }
-
+// Login user
 func Login(c *gin.Context) {
-	var req user.LoginRequest
-
-	// Bind JSON dari body
+	var req userdto.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Cari user berdasarkan email
-	var foundUser model.User
-	if err := config.DB.Where("email = ?", req.Email).First(&foundUser).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Email tidak ditemukan"})
-		return
-	}
-
-	// Cek password cocok
-	if err := bcrypt.CompareHashAndPassword([]byte(foundUser.Password), []byte(req.Password)); err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Password salah"})
-		return
-	}
-
-	// ✅ Generate JWT token
-	token, err := utils.GenerateJWT(foundUser.ID, foundUser.Role)
+	userService := service.NewUserService(repository.NewUserRepository(config.DB))
+	token, err := userService.Login(req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membuat token"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
 
-	// ✅ Return token jika berhasil login
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Login berhasil",
 		"token":   token,
 	})
 }
-
-
-// ! nampilin semua user
-func GetAllUsers(c *gin.Context) {
-	var users []model.User
-	config.DB.Find(&users)
-	for i := range users {
-		users[i].Password = ""
-	}
-	c.JSON(http.StatusOK, users)
-}
-
-// ! nampilin satu semua user
-func GetUserByID(c *gin.Context) {
-	id, _ := strconv.Atoi(c.Param("id"))
-	var user model.User
-	if err := config.DB.First(&user, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "User tidak ditemukan"})
-		return
-	}
-	user.Password = ""
+// Ambil data user yang sedang login
+func GetCurrentUser(c *gin.Context) {
+	user, _ := c.Get("user")
 	c.JSON(http.StatusOK, user)
 }
 
-func UpdateUser(c *gin.Context) {
-	id, _ := strconv.Atoi(c.Param("id"))
-	var req user.UpdateRequest
+// Update user yang sedang login
+func UpdateCurrentUser(c *gin.Context) {
+	currentUser := c.MustGet("user").(model.User)
+
+	var req userdto.UpdateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	var u model.User
-	if err := config.DB.First(&u, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "User tidak ditemukan"})
+	if req.Name != "" {
+		currentUser.Name = req.Name
+	}
+	if req.Email != "" {
+		currentUser.Email = req.Email
+	}
+	if req.Password != "" {
+		hashed, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		currentUser.Password = string(hashed)
+	}
+
+	if err := config.DB.Save(&currentUser).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	if req.Password != "" {
-		hash, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-		u.Password = string(hash)
-	}
-	if req.Name != "" {
-		u.Name = req.Name
-	}
-	if req.Email != "" {
-		u.Email = req.Email
+	currentUser.Password = ""
+	c.JSON(http.StatusOK, currentUser)
+}
+
+// Hapus user yang sedang login
+func DeleteCurrentUser(c *gin.Context) {
+	currentUser := c.MustGet("user").(model.User)
+
+	if err := config.DB.Delete(&currentUser).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
 	}
 
-	config.DB.Save(&u)
-	u.Password = ""
-	c.JSON(http.StatusOK, u)
+	c.JSON(http.StatusOK, gin.H{"message": "Akun berhasil dihapus"})
+}
+
+func GetAllUsers(c *gin.Context) {
+	users, err := service.NewUserService(repository.NewUserRepository(config.DB)).GetAllUsers()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, users)
 }
 
 func DeleteUser(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
-	if err := config.DB.Delete(&model.User{}, id).Error; err != nil {
+	err := service.NewUserService(repository.NewUserRepository(config.DB)).DeleteUserByID(uint(id))
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
 	c.JSON(http.StatusOK, gin.H{"message": "User berhasil dihapus"})
+}
+
+func GetAllSellers(c *gin.Context) {
+	var sellers []model.User
+	if err := config.DB.Where("role = ?", "seller").Find(&sellers).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Hapus password biar gak ikut ke-expose
+	for i := range sellers {
+		sellers[i].Password = ""
+	}
+
+	c.JSON(http.StatusOK, sellers)
 }

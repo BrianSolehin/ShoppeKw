@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"ecommerce-api/config"
+	"ecommerce-api/model"
 	"ecommerce-api/utils"
 	"net/http"
 	"strings"
@@ -25,9 +27,18 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// simpan userID & role ke context
-		c.Set("userID", claims.UserID)
-		c.Set("role", claims.Role)
+		var user model.User
+		if err := config.DB.First(&user, claims.UserID).Error; err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "User tidak ditemukan"})
+			c.Abort()
+			return
+		}
+
+		
+		c.Set("userID", user.ID)
+		c.Set("user", user)
+		c.Set("role", user.Role) // ✅ TAMBAHKAN INI
 		c.Next()
 	}
 }
+

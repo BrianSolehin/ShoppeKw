@@ -4,6 +4,8 @@ import (
 	"ecommerce-api/config"
 	"ecommerce-api/model"
 	"ecommerce-api/route"
+	"log"
+	"fmt"
 )
 
 func main() {
@@ -24,8 +26,10 @@ func main() {
 
 	// ✅ INISIALISASI ROUTER LENGKAP DENGAN MIDDLEWARE & PREFIX
 	r := route.SetupRouter()
-
+	log.Println("Server running on http://localhost:8080")
+	r.Run(":8080")
+	fmt.Println("User routes registered...")
 	// ✅ JALANKAN SERVER
-	r.Run("0.0.0.0:8080")
+	r.Run(":8080")
 
 }

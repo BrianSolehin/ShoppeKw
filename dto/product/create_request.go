@@ -6,5 +6,4 @@ type CreateRequest struct {
 	Price       float64 `json:"price" binding:"required"`
 	Stock       int     `json:"stock" binding:"required"`
 	CategoryID  uint    `json:"category_id" binding:"required"`
-	UserID      uint    `json:"user_id" binding:"required"`
 }

@@ -3,16 +3,19 @@ package service
 import (
 	"errors"
 	"strconv"
-	"time" // ✅ UNTUK time.Now()
-
-	"ecommerce-api/dto/order"  // ✅ UNTUK order.CreateRequest
-	"ecommerce-api/model"      // ✅ UNTUK model.Order, model.OrderDetail
-	"ecommerce-api/repository" // ✅ UNTUK repository.CreateOrderWithDetails
+	"time" 
+	"ecommerce-api/config"
+	// "fmt"
+	"gorm.io/gorm"
+	"ecommerce-api/dto/order"  
+	"ecommerce-api/model"      
+	"ecommerce-api/repository" 
 )
 
 func GetAllOrders() ([]model.Order, error) {
 	return repository.FindAllOrders()
 }
+
 func GetOrderByID(idStr string, userID uint, role string) (model.Order, []model.OrderDetail, error) {
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
@@ -37,7 +40,6 @@ func GetOrderByID(idStr string, userID uint, role string) (model.Order, []model.
 	return order, details, nil
 }
 
-
 func DeleteOrder(idStr string, userID uint, role string) error {
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
@@ -57,41 +59,86 @@ func DeleteOrder(idStr string, userID uint, role string) error {
 	return repository.DeleteOrderByID(uint(id))
 }
 
+func CreateOrder(req order.CreateRequest, userID uint) (uint, error) {
+	tx := config.DB.Begin()
 
-func CreateOrder(req order.CreateRequest) (uint, error) {
-	if req.UserID == 0 || len(req.Items) == 0 {
-		return 0, errors.New("data order tidak lengkap")
-	}
-
-	order := model.Order{
-		UserID:      req.UserID,
-		Status:      "completed",
-		OrderDate:   time.Now(),
-		TotalAmount: 0,
-	}
-
-	// Hitung total dan simpan order detail
-	var total float64
-	var details []model.OrderDetail
+	// Hitung total harga order
+	var totalAmount float64
 	for _, item := range req.Items {
-		detail := model.OrderDetail{
-			ProductID: item.ProductID,
-			Quantity:  item.Quantity,
-			Price:     item.Price,
+		var product model.Product
+		if err := tx.First(&product, item.ProductID).Error; err != nil {
+			tx.Rollback()
+			return 0, errors.New("produk tidak ditemukan")
 		}
-		total += item.Price * float64(item.Quantity)
-		details = append(details, detail)
-	}
-	order.TotalAmount = total
 
-	orderID, err := repository.CreateOrderWithDetails(order, details)
-	if err != nil {
+		if item.Quantity > product.Stock {
+			tx.Rollback()
+			return 0, errors.New("stok tidak cukup untuk produk ID: " + string(rune(item.ProductID)))
+		}
+
+		totalAmount += float64(item.Quantity) * product.Price
+	}
+
+	// Buat order utama
+	order := model.Order{
+		UserID:      userID,
+		OrderDate:   time.Now(),
+		TotalAmount: totalAmount,
+		Status:      "completed", // bisa juga "pending"
+	}
+
+	if err := tx.Create(&order).Error; err != nil {
+		tx.Rollback()
 		return 0, err
 	}
 
-	return orderID, nil
+	// Simpan detail item dalam order
+	for _, item := range req.Items {
+		orderDetail := model.OrderDetail{
+			OrderID:   order.ID,
+			ProductID: item.ProductID,
+			Quantity:  item.Quantity,
+		}
+
+		if err := tx.Create(&orderDetail).Error; err != nil {
+			tx.Rollback()
+			return 0, err
+		}
+
+		// Kurangi stok produk
+		if err := tx.Model(&model.Product{}).
+			Where("id = ?", item.ProductID).
+			Update("stock", gorm.Expr("stock - ?", item.Quantity)).Error; err != nil {
+			tx.Rollback()
+			return 0, err
+		}
+	}
+
+	tx.Commit()
+	return order.ID, nil
 }
 
 func GetMyOrders(userID uint) ([]model.Order, error) {
 	return repository.FindOrdersByUserID(userID)
+}
+func GetOrdersBySeller(userID uint) ([]model.Order, error) {
+	return repository.FindOrdersBySellerID(userID)
+}
+
+func UpdateOrderStatusBySeller(orderID uint, sellerID uint, newStatus string) error {
+	// validasi status
+	if newStatus != "completed" && newStatus != "cancelled" && newStatus != "pending" {
+		return errors.New("status tidak valid")
+	}
+
+	// cek apakah seller punya produk di order tsb
+	hasAccess, err := repository.CheckSellerOwnsOrder(orderID, sellerID)
+	if err != nil {
+		return err
+	}
+	if !hasAccess {
+		return errors.New("akses ditolak: order bukan milikmu")
+	}
+
+	return repository.UpdateOrderStatus(orderID, newStatus)
 }
